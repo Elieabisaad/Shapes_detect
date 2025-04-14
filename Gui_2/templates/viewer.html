@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cluster Viewer</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        img {
+            max-width: 90%;
+            border: 6px solid #ccc;
+            margin-bottom: 20px;
+            transition: border 0.3s ease;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        input[type="number"] {
+            width: 60px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 0 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Cluster Crop Viewer</h1>
+
+    <div class="controls">
+        <button onclick="prevCluster()">⬅️ Previous</button>
+        <input type="number" id="clusterInput" min="1" placeholder="Cluster #">
+        <button onclick="goToCluster()">Go</button>
+        <button onclick="nextCluster()">Next ➡️</button>
+    </div>
+
+    <h2 id="clusterLabel">Cluster #</h2>
+    <img id="clusterImage" src="" alt="Cluster Image" style="width: 400px; image-rendering: pixelated;">
+
+    <script>
+        let maxCluster = {{ max_cluster }};
+        let current = {{ cluster_id or 1 }};
+        const outputDir = '{{ output_dir }}';
+
+        function updateImage() {
+            const img = document.getElementById('clusterImage');
+            const label = document.getElementById('clusterLabel');
+
+            img.src = `/static/${outputDir}/cluster_crops/Cluster_${String(current).padStart(2, '0')}_shapes.png`;
+            label.innerText = `Cluster ${current}`;
+
+            // Optional: reset border color or apply based on known logic
+            img.style.borderColor = '#ccc';
+        }
+
+        function prevCluster() {
+            if (current > 1) {
+                current--;
+                updateImage();
+            }
+        }
+
+        function nextCluster() {
+            if (current < maxCluster) {
+                current++;
+                updateImage();
+            }
+        }
+
+        function goToCluster() {
+            const input = parseInt(document.getElementById('clusterInput').value);
+            if (!isNaN(input) && input >= 1 && input <= maxCluster) {
+                current = input;
+                updateImage();
+            } else {
+                alert(`Enter a number between 1 and ${maxCluster}`);
+            }
+        }
+
+        window.onload = updateImage;
+    </script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Crop & Refine</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        label {
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 15px 0;
+        }
+
+        #canvas {
+            border: 1px solid black;
+            cursor: crosshair;
+            display: none;
+            margin-top: 10px;
+        }
+
+        fieldset {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 15px;
+            width: fit-content;
+        }
+
+        /* ✅ Tooltip Styling */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: max-content;
+            max-width: 300px;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            padding: 6px 10px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <h2>Click and Drag to Select Crop Region</h2>
+
+    <form id="cropForm" action="/refine" method="post" enctype="multipart/form-data">
+        <!-- Image Uploads -->
+        <label>
+            BEFORE Image:
+            <input type="file" name="before_image" id="before_image" accept="image/*" required>
+        </label>
+
+        <label>
+            AFTER Image:
+            <input type="file" name="after_image" id="after_image" accept="image/*" required>
+        </label>
+
+        <!-- Options -->
+        <label>
+            <input type="checkbox" id="full_image" name="full_image" value="1">
+            Use full image (no crop)
+        </label>
+
+        <label>
+            <input type="checkbox" id="save_intermediate" name="save_intermediate" value="1">
+            Save intermediate steps
+        </label>
+
+        <!-- Refinement Parameters -->
+        <fieldset>
+            <legend><b>Refinement Parameters</b></legend>
+
+            <label>
+                Gaussian Blur 1 (ksize):
+                <input type="number" name="ksize1" value="9" step="2" min="1" style="width: 60px;">
+                <span class="tooltip">❔
+                    <span class="tooltiptext">Size of the first Gaussian blur kernel. Larger values apply stronger smoothing before processing.</span>
+                </span>
+            </label><br>
+
+            <label>
+                Gaussian Blur 1 (sigma):
+                <input type="number" name="sigma1" value="2.0" step="0.1" style="width: 60px;">
+                <span class="tooltip">❔
+                    <span class="tooltiptext">Sigma value for the first Gaussian blur. Controls how much the image is smoothed to reduce noise.</span>
+                </span>
+            </label><br>
+
+            <label>
+                Contrast Alpha:
+                <input type="number" name="alpha" value="3.0" step="0.1" style="width: 60px;">
+                <span class="tooltip">❔
+                    <span class="tooltiptext">Controls the intensity scaling of pixel values. Higher alpha increases contrast and highlights features.</span>
+                </span>
+            </label><br>
+
+            <label>
+                Gaussian Blur 2 (ksize):
+                <input type="number" name="ksize2" value="21" step="2" min="1" style="width: 60px;">
+                <span class="tooltip">❔
+                    <span class="tooltiptext">Size of the heavy blur kernel applied before subtracting to enhance high-frequency details.</span>
+                </span>
+            </label><br>
+
+            <label>
+                Gaussian Blur 2 (sigma):
+                <input type="number" name="sigma2" value="0" step="0.1" style="width: 60px;">
+                <span class="tooltip">❔
+                    <span class="tooltiptext">Sigma for the heavy blur. When 0, it's automatically calculated based on kernel size.</span>
+                </span>
+            </label><br>
+
+            <label>
+                Final Blur (ksize):
+                <input type="number" name="ksize3" value="5" step="2" min="1" style="width: 60px;">
+                <span class="tooltip">❔
+                    <span class="tooltiptext">Applies one last blur before thresholding. Softens sharp transitions to stabilize binary mask.</span>
+                </span>
+            </label><br>
+
+            <label>
+                Final Blur (sigma):
+                <input type="number" name="sigma3" value="0" step="0.1" style="width: 60px;">
+                <span class="tooltip">❔
+                    <span class="tooltiptext">Sigma for the final blur step. Controls the spread of smoothing before binarizing.</span>
+                </span>
+            </label><br>
+
+            <label>
+                Threshold:
+                <input type="number" name="threshold" value="20" step="1" style="width: 60px;">
+                <span class="tooltip">❔
+                    <span class="tooltiptext">Minimum intensity required to keep a pixel in the binary output. Lower values keep more detail.</span>
+                </span>
+            </label>
+        </fieldset>
+
+        <!-- Refine Button -->
+        <button type="submit">Refine</button>
+
+        <!-- Hidden fields to store crop coords -->
+        <input type="hidden" name="x_start" id="x_start">
+        <input type="hidden" name="x_end" id="x_end">
+        <input type="hidden" name="y_start" id="y_start">
+        <input type="hidden" name="y_end" id="y_end">
+
+        <!-- Crop Canvas -->
+        <canvas id="canvas"></canvas>
+    </form>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const beforeInput = document.getElementById('before_image');
+        const fullImageCheckbox = document.getElementById('full_image');
+
+        let img = new Image();
+        let isDrawing = false;
+        let startX = 0, startY = 0;
+
+        beforeInput.addEventListener('change', function () {
+            const file = this.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        img.onload = function () {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            canvas.style.display = 'block';
+            ctx.drawImage(img, 0, 0);
+        }
+
+        canvas.onmousedown = function (e) {
+            if (fullImageCheckbox.checked) return;
+            startX = e.offsetX;
+            startY = e.offsetY;
+            isDrawing = true;
+        };
+
+        canvas.onmousemove = function (e) {
+            if (!isDrawing || fullImageCheckbox.checked) return;
+            const currentX = e.offsetX;
+            const currentY = e.offsetY;
+            ctx.drawImage(img, 0, 0);
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(startX, startY, currentX - startX, currentY - startY);
+        };
+
+        canvas.onmouseup = function (e) {
+            if (fullImageCheckbox.checked) return;
+            isDrawing = false;
+            const x_end = e.offsetX;
+            const y_end = e.offsetY;
+
+            document.getElementById('x_start').value = Math.min(startX, x_end);
+            document.getElementById('x_end').value = Math.max(startX, x_end);
+            document.getElementById('y_start').value = Math.min(startY, y_end);
+            document.getElementById('y_end').value = Math.max(startY, y_end);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Refinement Results</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .row {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        img {
+            max-width: 400px;
+            height: auto;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            margin-bottom: 10px;
+        }
+
+        .buttons {
+            margin-top: 30px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .top-analyze {
+            margin-bottom: 30px;
+        }
+
+        /* Tooltip styling */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: max-content;
+            max-width: 300px;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            padding: 6px 10px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>🧪 Refinement Results</h1>
+
+    {% if summary %}
+        <h2>
+            📈 Overall Shape Increase (Gains Only): {{ summary.gain_only_percent }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">This is calculated as the percentage increase in shape count only for cluster regions that had a positive shape change (ignoring losses).</span>
+            </span>
+        </h2>
+        <p>
+            🔼 Gains: {{ summary.gain_percent }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">Percentage of cluster regions that experienced an increase in shape count.</span>
+            </span><br>
+
+            🔽 No Change: {{ summary.nochange_percent }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">Percentage of cluster regions that had no change in shape count.</span>
+            </span><br>
+
+            🔽 Losses: {{ summary.loss_percent }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">Percentage of cluster regions that experienced a decrease in shape count.</span>
+            </span>
+        </p>
+
+        <h3>
+            🧾 Overall Shape Increase: {{ summary.percent_change }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">This is the net percent change in total shape count across all cluster regions.</span>
+            </span>
+        </h3>
+    {% endif %}
+
+    <!-- 🔼 Analyze Button at Top -->
+    <div class="top-analyze">
+        <form action="/analyze" method="post" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label for="min_area">Min Shape Area:</label>
+            <input type="number" name="min_area" id="min_area" value="10" min="0" style="width: 80px;">
+            <button type="button" onclick="document.getElementById('min_area').value = 10;">Default</button>
+            <button type="submit">📊 Analyze Shapes</button>
+        </form>
+    </div>
+
+    <!-- Row 1: Original Images -->
+    <div class="row">
+        <div class="column">
+            <h2>Original Before</h2>
+            <img src="{{ url_for('static', filename=output_dir + '/OriginalBefor.jpg') }}" alt="Original Before">
+        </div>
+        <div class="column">
+            <h2>Original After</h2>
+            <img src="{{ url_for('static', filename=output_dir + '/OriginalAfter.jpg') }}" alt="Original After">
+        </div>
+    </div>
+
+    <!-- Row 2: Processed (Frangi) Images -->
+    <div class="row">
+        <div class="column">
+            <h2>Processed Before (Frangi)</h2>
+            <img src="{{ url_for('static', filename=output_dir + '/FranjeBefore.jpg') }}" alt="Frangi Before">
+        </div>
+        <div class="column">
+            <h2>Processed After (Frangi)</h2>
+            <img src="{{ url_for('static', filename=output_dir + '/Franjeafter.jpg') }}" alt="Frangi After">
+        </div>
+    </div>
+
+    <!-- Bottom Buttons -->
+    <div class="buttons">
+        <form action="/viewer" method="post" target="_blank">
+            <button type="submit" id="viewerBtn" disabled>🔍 Open Interactive Viewer</button>
+        </form>
+
+        <form action="/results_table" method="get">
+            <button type="submit" id="tableBtn" disabled>📑 Table View</button>
+        </form>
+
+        <form action="/heatmap" method="post" target="_blank">
+            <button type="submit" id="heatmapBtn" disabled>🔥 View Heatmap</button>
+        </form>
+    </div>
+
+    <!-- JS Logic -->
+    <script>
+        const analysisDone = {{ 'true' if analysis_done else 'false' }};
+
+        if (analysisDone) {
+            document.getElementById("viewerBtn").disabled = false;
+            document.getElementById("tableBtn").disabled = false;
+            document.getElementById("heatmapBtn").disabled = false;
+
+            if (!sessionStorage.getItem("analysis_popup_shown")) {
+                alert("✅ Analysis complete!");
+                sessionStorage.setItem("analysis_popup_shown", "true");
+            }
+        }
+    </script>
+</body>
+
+</html>

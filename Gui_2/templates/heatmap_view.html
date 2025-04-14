@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>📊 Region Heatmap</title>
+    <style>
+        body {
+            text-align: center;
+            padding: 30px;
+            font-family: sans-serif;
+        }
+        #heatmap-container {
+            position: relative;
+            display: inline-block;
+        }
+        #heatmap-img {
+            width: 100%;
+            max-width: 90vw;
+            height: auto;
+            border: 2px solid #333;
+            display: block;
+        }
+        .label {
+            position: absolute;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px black;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            pointer-events: auto;
+        }
+        .modal {
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            max-height: 90vh;
+            overflow: auto;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 8px solid white;
+        }
+        .modal-content img {
+            width: 100%;
+            height: auto;
+            max-height: 70vh;
+        }
+        .close {
+            float: right;
+            font-size: 28px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #555;
+        }
+        .close:hover {
+            color: black;
+        }
+        .zoom-100 { width: 50vw; }
+        .zoom-125 { width: 65vw; }
+        .zoom-150 { width: 80vw; }
+        .zoom-200 { width: 95vw; }
+        .zoom-controls button {
+            margin: 4px;
+            padding: 6px 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Region Heatmap</h1>
+
+    <div id="heatmap-container">
+        <img id="heatmap-img" src="{{ url_for('static', filename=output_dir + '/region_heatmap_with_colorbar.jpg') }}" alt="Heatmap">
+        {% for region in regions %}
+        <div class="label"
+             data-id="{{ region.id + 1 }}"
+             data-x="{{ region.center[0] }}"
+             data-y="{{ region.center[1] }}"
+             data-before="{{ region.before }}"
+             data-after="{{ region.after }}"
+             data-diff="{{ region.diff }}"
+             data-color='{{ region.color | tojson }}'
+             onclick="openModal(this)">
+            {{ region.id + 1 }}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div id="modal" class="modal" style="display:none;">
+        <div class="modal-content zoom-100" id="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modal-title">Cluster #</h2>
+            <p id="modal-stats">Before: 0, After: 0, Δ: 0</p>
+            <div class="image-container">
+                <img id="modal-img" src="" alt="Cluster Image">
+            </div>
+            <div class="zoom-controls">
+                <button onclick="setZoom('zoom-125')">➕ Zoom In</button>
+                <button onclick="setZoom('zoom-100')">➖ Reset</button>
+                <button onclick="setZoom('zoom-150')">🔎 Large</button>
+                <button onclick="setZoom('zoom-200')">🖥 Full</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const outputDir = '{{ output_dir }}';
+
+        function positionLabels() {
+            const img = document.getElementById("heatmap-img");
+            const container = document.getElementById("heatmap-container");
+            const labels = container.getElementsByClassName("label");
+
+            const naturalWidth = img.naturalWidth;
+            const naturalHeight = img.naturalHeight;
+            const displayedWidth = img.clientWidth;
+            const displayedHeight = img.clientHeight;
+
+            const scaleX = displayedWidth / naturalWidth;
+            const scaleY = displayedHeight / naturalHeight;
+
+            for (let label of labels) {
+                const x = parseFloat(label.dataset.x);
+                const y = parseFloat(label.dataset.y);
+                label.style.left = (x * scaleX) + "px";
+                label.style.top = (y * scaleY) + "px";
+            }
+        }
+
+        function openModal(el) {
+            const id = el.dataset.id;
+            const before = el.dataset.before;
+            const after = el.dataset.after;
+            const diff = el.dataset.diff;
+
+            const modal = document.getElementById('modal');
+            const modalContent = document.getElementById('modal-content');
+            const img = document.getElementById('modal-img');
+            const title = document.getElementById('modal-title');
+            const stats = document.getElementById('modal-stats');
+
+            modal.classList.add('active');
+            modalContent.className = 'modal-content zoom-100';
+            currentZoomClass = 'zoom-100';
+            title.innerText = `Cluster ${id}`;
+            stats.innerText = `Before: ${before} | After: ${after} | Δ: ${diff}`;
+            img.src = `/static/${outputDir}/cluster_crops/Cluster_${String(id).padStart(2, '0')}_shapes.png`;
+            modal.style.display = 'flex';
+
+            try {
+                const color = JSON.parse(el.dataset.color);  // [r, g, b]
+                modalContent.style.border = `4px solid rgb(${color.join(",")})`;
+modalContent.style.boxShadow = `0 0 30px 10px rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.6)`;
+
+            } catch (e) {
+                console.warn("No color found or error parsing color");
+                modalContent.style.border = "4px solid white";
+modalContent.style.boxShadow = "none";
+
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        let currentZoomClass = 'zoom-100';
+
+        function setZoom(newClass) {
+            const modalContent = document.getElementById('modal-content');
+            modalContent.classList.remove(currentZoomClass);
+            modalContent.classList.add(newClass);
+            currentZoomClass = newClass;
+        }
+
+        window.onload = positionLabels;
+        window.onresize = positionLabels;
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('modal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+
+        window.addEventListener('keydown', function(e) {
+            const modal = document.getElementById('modal');
+            if (modal.style.display === 'none') return;
+
+            switch (e.key) {
+                case '+':
+                case '=': setZoom('zoom-125'); break;
+                case '-':
+                case '_': setZoom('zoom-100'); break;
+                case '1': setZoom('zoom-100'); break;
+                case '2': setZoom('zoom-150'); break;
+                case '3': setZoom('zoom-200'); break;
+                case 'Escape': closeModal(); break;
+            }
+        });
+    </script>
+</body>
+</html>

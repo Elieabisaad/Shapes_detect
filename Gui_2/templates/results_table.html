@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cluster Shape Summary (Excel View)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+
+        table {
+            margin: 0 auto;
+            border-collapse: collapse;
+            width: 90%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 8px 12px;
+            border: 1px solid #aaa;
+            text-align: center;
+        }
+
+        th {
+            background-color: #f4f4f4;
+        }
+
+        td.gain {
+            background-color: #d4edda;
+            color: #155724;
+            font-weight: bold;
+        }
+
+        td.loss {
+            background-color: #f8d7da;
+            color: #721c24;
+            font-weight: bold;
+        }
+
+        td.no-change {
+            background-color: #fff3cd;
+            color: #856404;
+            font-weight: bold;
+        }
+
+        table tr:hover {
+            background-color: #eef;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        button {
+            padding: 5px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .modal {
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            max-height: 90vh;
+            overflow: auto;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .zoom-100 { width: 50vw; }
+        .zoom-125 { width: 65vw; }
+        .zoom-150 { width: 80vw; }
+        .zoom-200 { width: 95vw; }
+
+        .modal-content img {
+            width: 100%;
+            height: auto;
+            max-height: 70vh;
+        }
+
+        .close {
+            float: right;
+            font-size: 28px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .close:hover {
+            color: black;
+        }
+
+        .zoom-controls {
+            margin-top: 10px;
+        }
+
+        /* ✅ Tooltip Styling */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: max-content;
+            max-width: 300px;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            padding: 6px 10px;
+            border-radius: 6px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>📈 Cluster Shape Summary</h1>
+
+    {% if summary %}
+        <h2>
+            📈 Overall Shape Increase (Gains Only): {{ summary.gain_only_percent }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">Percentage increase considering only clusters that gained shapes (ignores losses).</span>
+            </span>
+        </h2>
+        <p>
+            🔼 Gains: {{ summary.gain_percent }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">Percentage of clusters that had more shapes after the reaction.</span>
+            </span><br>
+
+            🔽 No Change: {{ summary.nochange_percent }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">Percentage of clusters where the number of shapes remained constant.</span>
+            </span><br>
+
+            🔽 Losses: {{ summary.loss_percent }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">Percentage of clusters that lost shapes after the reaction.</span>
+            </span>
+        </p>
+        <h3>
+            🧾 Overall Shape Increase: {{ summary.percent_change }}%
+            <span class="tooltip">❔
+                <span class="tooltiptext">Net percent change in shape count across all clusters (gains and losses included).</span>
+            </span>
+        </h3>
+    {% endif %}
+
+    <table>
+        <thead>
+            <tr>
+                {% for col in header %}
+                    <th>{{ col }}</th>
+                {% endfor %}
+                <th>View</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                {% for col_index in range(header|length) %}
+                    {% set col_name = header[col_index] %}
+                    {% set value = row[col_index] %}
+
+                    {% if col_name == 'After Shape Count' %}
+                        {% if value > row[1] %}
+                            <td class="gain">{{ value }}</td>
+                        {% elif value < row[1] %}
+                            <td class="loss">{{ value }}</td>
+                        {% else %}
+                            <td class="no-change">{{ value }}</td>
+                        {% endif %}
+                    {% elif col_name == 'Change Type' %}
+                        {% set class_name = value|lower|replace(' ', '-') %}
+                        <td class="{{ class_name }}">{{ value }}</td>
+                    {% else %}
+                        <td>{{ value }}</td>
+                    {% endif %}
+                {% endfor %}
+                <td>
+                    <button onclick="openModal({{ row[0]|int }})">🔍 View</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Modal -->
+    <div id="modal" class="modal" style="display:none;">
+        <div class="modal-content zoom-100" id="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div class="image-container">
+                <img id="modal-img" src="" alt="Cluster Image">
+            </div>
+            <div class="zoom-controls">
+                <button onclick="setZoom('zoom-125')">➕ Zoom In</button>
+                <button onclick="setZoom('zoom-100')">➖ Reset</button>
+                <button onclick="setZoom('zoom-150')">🔎 Large</button>
+                <button onclick="setZoom('zoom-200')">🖥 Full</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const outputDir = '{{ output_dir }}';
+        let currentZoomClass = 'zoom-100';
+
+        function openModal(index) {
+            const modal = document.getElementById('modal');
+            const modalContent = document.getElementById('modal-content');
+            const img = document.getElementById('modal-img');
+
+            modal.classList.add('active');
+            modalContent.className = 'modal-content zoom-100';
+            currentZoomClass = 'zoom-100';
+            img.src = `/static/${outputDir}/cluster_crops/Cluster_${String(index).padStart(2, '0')}_shapes.png`;
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        function setZoom(newClass) {
+            const modalContent = document.getElementById('modal-content');
+            modalContent.classList.remove(currentZoomClass);
+            modalContent.classList.add(newClass);
+            currentZoomClass = newClass;
+        }
+
+        window.addEventListener('keydown', function (e) {
+            const modal = document.getElementById('modal');
+            if (modal.style.display === 'none') return;
+
+            switch (e.key) {
+                case '+':
+                case '=': setZoom('zoom-125'); break;
+                case '-':
+                case '_': setZoom('zoom-100'); break;
+                case '1': setZoom('zoom-100'); break;
+                case '2': setZoom('zoom-150'); break;
+                case '3': setZoom('zoom-200'); break;
+                case 'Escape': closeModal(); break;
+            }
+        });
+
+        window.onclick = function (event) {
+            const modal = document.getElementById('modal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>
